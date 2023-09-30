@@ -166,15 +166,6 @@ static int_fast32_t xshm_update_geometry(struct xshm_data *data)
 	int_fast32_t prev_width = data->adj_width;
 	int_fast32_t prev_height = data->adj_height;
 
-	if (data->show_current_cursor_screen) {
-		//Set screen_id to the corresponding screen that the mouse is on
-		data->screen_id = xshm_get_current_cursor_screen(data);
-
-		if (data->screen_id < 0) {
-			blog(LOG_ERROR, "failed to get screen that mouse cursor is on !");
-		}
-	}
-
 	if (data->use_randr) {
 		if (randr_screen_geo(data->xcb, data->screen_id, &data->x_org,
 				     &data->y_org, &data->width, &data->height,
@@ -201,6 +192,15 @@ static int_fast32_t xshm_update_geometry(struct xshm_data *data)
 	if (!data->width || !data->height) {
 		blog(LOG_ERROR, "Failed to get geometry");
 		return -1;
+	}
+
+	if (data->show_current_cursor_screen) {
+		//Set screen_id to the corresponding screen that the mouse is on
+		data->screen_id = xshm_get_current_cursor_screen(data);
+
+		if (data->screen_id < 0) {
+			blog(LOG_ERROR, "failed to get screen that mouse cursor is on !");
+		}
 	}
 
 	data->adj_y_org = data->y_org;
