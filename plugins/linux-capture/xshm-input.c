@@ -59,6 +59,7 @@ struct xshm_data {
 	int_fast32_t adj_width;
 	int_fast32_t adj_height;
 
+	bool show_current_cursor_screen;
 	bool show_cursor;
 	bool use_xinerama;
 	bool use_randr;
@@ -273,6 +274,7 @@ static void xshm_update(void *vptr, obs_data_t *settings)
 	xshm_capture_stop(data);
 
 	data->screen_id = obs_data_get_int(settings, "screen");
+	data->show_current_cursor_screen = obs_data_get_bool(settings, "show_current_cursor_screen");
 	data->show_cursor = obs_data_get_bool(settings, "show_cursor");
 	data->advanced = obs_data_get_bool(settings, "advanced");
 	data->server = bstrdup(obs_data_get_string(settings, "server"));
@@ -417,6 +419,8 @@ static obs_properties_t *xshm_properties(void *vptr)
 
 	obs_properties_add_list(props, "screen", obs_module_text("Screen"),
 				OBS_COMBO_TYPE_LIST, OBS_COMBO_FORMAT_INT);
+	obs_properties_add_bool(props, "show_current_cursor_screen",
+				obs_module_text("CaptureCurrentCursorScreen"));
 	obs_properties_add_bool(props, "show_cursor",
 				obs_module_text("CaptureCursor"));
 	obs_property_t *advanced = obs_properties_add_bool(
