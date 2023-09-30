@@ -112,6 +112,10 @@ static int_fast32_t xshm_update_geometry(struct xshm_data *data)
 	int_fast32_t prev_width = data->adj_width;
 	int_fast32_t prev_height = data->adj_height;
 
+	char screen_str[12];
+    sprintf(screen_str, "%lu", data->screen_id);
+	blog(LOG_INFO, "Screen ID: %s", screen_str);
+
 	if (data->use_randr) {
 		if (randr_screen_geo(data->xcb, data->screen_id, &data->x_org,
 				     &data->y_org, &data->width, &data->height,
@@ -293,6 +297,7 @@ static void xshm_update(void *vptr, obs_data_t *settings)
 static void xshm_defaults(obs_data_t *defaults)
 {
 	obs_data_set_default_int(defaults, "screen", 0);
+	obs_data_set_default_bool(defaults, "show_current_cursor_screen", false);
 	obs_data_set_default_bool(defaults, "show_cursor", true);
 	obs_data_set_default_bool(defaults, "advanced", false);
 	obs_data_set_default_int(defaults, "cut_top", 0);
@@ -408,6 +413,24 @@ static bool xshm_server_changed(obs_properties_t *props, obs_property_t *p,
 }
 
 /**
+ * The x server was changed
+ */
+static bool xshm_show_current_cursor_screen_changed(obs_properties_t *props, obs_property_t *p,
+				obs_data_t *settings)
+{
+	UNUSED_PARAMETER(p);
+
+	obs_property_t *screens = obs_properties_get(props, "screen");
+	obs_property_t *show_current_cursor_screen = obs_properties_get(props, "show_current_cursor_screen");
+	bool show_current_enabled = obs_data_get_bool(settings, "show_current_cursor_screen");
+
+	//Set the screens property to disabled if user selects display current cursor screen
+	obs_property_set_enabled(screens, !show_current_enabled);
+
+	return true;
+}
+
+/**
  * Get the properties for the capture
  */
 static obs_properties_t *xshm_properties(void *vptr)
@@ -419,7 +442,7 @@ static obs_properties_t *xshm_properties(void *vptr)
 
 	obs_properties_add_list(props, "screen", obs_module_text("Screen"),
 				OBS_COMBO_TYPE_LIST, OBS_COMBO_FORMAT_INT);
-	obs_properties_add_bool(props, "show_current_cursor_screen",
+	obs_property_t *should_show_current = obs_properties_add_bool(props, "show_current_cursor_screen",
 				obs_module_text("CaptureCurrentCursorScreen"));
 	obs_properties_add_bool(props, "show_cursor",
 				obs_module_text("CaptureCursor"));
@@ -445,6 +468,7 @@ static obs_properties_t *xshm_properties(void *vptr)
 	obs_property_t *server = obs_properties_add_text(
 		props, "server", obs_module_text("XServer"), OBS_TEXT_DEFAULT);
 
+	obs_property_set_modified_callback(should_show_current, xshm_show_current_cursor_screen_changed);
 	obs_property_set_modified_callback(advanced, xshm_toggle_advanced);
 	obs_property_set_modified_callback(server, xshm_server_changed);
 
@@ -531,6 +555,8 @@ static void xshm_video_render(void *vptr, gs_effect_t *effect)
 	XSHM_DATA(vptr);
 
 	effect = obs_get_base_effect(OBS_EFFECT_OPAQUE);
+
+	//TODO check which screen the cursor is on and switch data->screen_id to it
 
 	if (!data->texture)
 		return;
