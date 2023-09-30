@@ -42,7 +42,7 @@ struct xshm_data {
 	xcb_xcursor_t *cursor;
 
 	char *server;
-	uint_fast32_t screen_id;
+	int_fast32_t screen_id;
 	int_fast32_t x_org;
 	int_fast32_t y_org;
 	int_fast32_t width;
@@ -153,8 +153,6 @@ static int_fast32_t xshm_get_current_cursor_screen(struct xshm_data *data)
 		}
 	}
 
-	blog(LOG_INFO, "Mouse cursor is on screen %lu", screen_id);
-
 	return screen_id;
 }
 
@@ -171,13 +169,11 @@ static int_fast32_t xshm_update_geometry(struct xshm_data *data)
 	if (data->show_current_cursor_screen) {
 		//Set screen_id to the corresponding screen that the mouse is on
 		data->screen_id = xshm_get_current_cursor_screen(data);
-	}
 
-	char screen_str[12];
-	char current[10];
-    sprintf(screen_str, "%lu", data->screen_id);
-    sprintf(current, "%s", data->show_current_cursor_screen ? "true" : "false");
-	blog(LOG_INFO, "Screen ID: %s, current: %s", screen_str, current);
+		if (data->screen_id < 0) {
+			blog(LOG_ERROR, "failed to get screen that mouse cursor is on !");
+		}
+	}
 
 	if (data->use_randr) {
 		if (randr_screen_geo(data->xcb, data->screen_id, &data->x_org,
@@ -231,10 +227,11 @@ static int_fast32_t xshm_update_geometry(struct xshm_data *data)
 	if (data->cut_bot != 0)
 		data->adj_height = data->adj_height - data->cut_bot;
 
-	blog(LOG_INFO,
-	     "Geometry %" PRIdFAST32 "x%" PRIdFAST32 " @ %" PRIdFAST32
-	     ",%" PRIdFAST32,
-	     data->width, data->height, data->x_org, data->y_org);
+	if (!data->show_current_cursor_screen)
+		blog(LOG_INFO,
+			"Geometry %" PRIdFAST32 "x%" PRIdFAST32 " @ %" PRIdFAST32
+			",%" PRIdFAST32,
+			data->width, data->height, data->x_org, data->y_org);
 
 	if (prev_width == data->adj_width && prev_height == data->adj_height)
 		return 0;
@@ -318,7 +315,7 @@ static void xshm_capture_start(struct xshm_data *data)
 	}
 
 	data->cursor = xcb_xcursor_init(data->xcb);
-	xcb_xcursor_offset(data->cursor, data->adj_x_org, data->adj_y_org);
+	xcb_xcursor_offset(data->cursor, data->adj_x_org, data->adj_y_org, data->adj_width, data->adj_height);
 
 	obs_enter_graphics();
 
@@ -598,7 +595,12 @@ static void xshm_video_tick(void *vptr, float seconds)
 
 	gs_texture_set_image(data->texture, (void *)data->xshm->data,
 			     data->adj_width * 4, false);
-	xcb_xcursor_update(data->xcb, data->cursor);
+	xcb_xcursor_update(data->xcb, data->cursor, data->show_current_cursor_screen);
+
+	if (data->show_current_cursor_screen) {
+		//Set screen_id to the corresponding screen that the mouse is on
+		xshm_update_geometry(data);
+	}
 
 	obs_leave_graphics();
 
@@ -614,8 +616,6 @@ static void xshm_video_render(void *vptr, gs_effect_t *effect)
 	XSHM_DATA(vptr);
 
 	effect = obs_get_base_effect(OBS_EFFECT_OPAQUE);
-
-	//TODO check which screen the cursor is on and switch data->screen_id to it
 
 	if (!data->texture)
 		return;

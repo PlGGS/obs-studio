@@ -74,7 +74,7 @@ void xcb_xcursor_destroy(xcb_xcursor_t *data)
 	bfree(data);
 }
 
-void xcb_xcursor_update(xcb_connection_t *xcb, xcb_xcursor_t *data)
+void xcb_xcursor_update(xcb_connection_t *xcb, xcb_xcursor_t *data, bool show_current_cursor_screen)
 {
 	xcb_xfixes_get_cursor_image_cookie_t xc_c =
 		xcb_xfixes_get_cursor_image_unchecked(xcb);
@@ -86,8 +86,14 @@ void xcb_xcursor_update(xcb_connection_t *xcb, xcb_xcursor_t *data)
 	if (!data->tex || data->last_serial != xc->cursor_serial)
 		xcb_xcursor_create(data, xc);
 
-	data->x = xc->x - data->x_org;
-	data->y = xc->y - data->y_org;
+	if (show_current_cursor_screen) {
+		data->x = xc->x % data->width_org;
+		data->y = xc->y % data->height_org;
+	}
+	else {
+		data->x = xc->x - data->x_org;
+		data->y = xc->y - data->y_org;
+	}
 	data->x_render = data->x - xc->xhot;
 	data->y_render = data->y - xc->yhot;
 
@@ -126,10 +132,12 @@ void xcb_xcursor_render(xcb_xcursor_t *data)
 	gs_enable_framebuffer_srgb(previous);
 }
 
-void xcb_xcursor_offset(xcb_xcursor_t *data, const int x_org, const int y_org)
+void xcb_xcursor_offset(xcb_xcursor_t *data, const int x_org, const int y_org, const int width_org, const int height_org)
 {
 	data->x_org = x_org;
 	data->y_org = y_org;
+	data->width_org = width_org;
+	data->height_org = height_org;
 }
 
 void xcb_xcursor_offset_win(xcb_connection_t *xcb, xcb_xcursor_t *data,
@@ -152,7 +160,7 @@ void xcb_xcursor_offset_win(xcb_connection_t *xcb, xcb_xcursor_t *data,
 	xcb_translate_coordinates_reply_t *coords =
 		xcb_translate_coordinates_reply(xcb, coords_cookie, &err);
 	if (!err)
-		xcb_xcursor_offset(data, coords->dst_x, coords->dst_y);
+		xcb_xcursor_offset(data, coords->dst_x, coords->dst_y, data->width_org, data->height_org);
 
 	free(coords);
 	free(geom);

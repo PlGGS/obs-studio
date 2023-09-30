@@ -684,7 +684,7 @@ static void xcompcap_video_tick(void *data, float seconds)
 		xcomp_create_pixmap(conn, s, LOG_DEBUG);
 		xcb_xcursor_offset_win(conn, s->cursor, s->win);
 		xcb_xcursor_offset(s->cursor, s->cursor->x_org + s->crop_left,
-				   s->cursor->y_org + s->crop_top);
+				   s->cursor->y_org + s->crop_top, s->width, s->height);
 	}
 
 	if (!s->gltex)
@@ -694,7 +694,7 @@ static void xcompcap_video_tick(void *data, float seconds)
 		goto done;
 
 	if (s->show_cursor) {
-		xcb_xcursor_update(conn, s->cursor);
+		xcb_xcursor_update(conn, s->cursor, false);
 
 		s->cursor_outside = s->cursor->x < 0 || s->cursor->y < 0 ||
 				    s->cursor->x > (int)xcompcap_get_width(s) ||
@@ -907,7 +907,7 @@ static void xcompcap_update(void *data, obs_data_t *settings)
 	xcomp_create_pixmap(conn, s, LOG_ERROR);
 	xcb_xcursor_offset_win(conn, s->cursor, s->win);
 	xcb_xcursor_offset(s->cursor, s->cursor->x_org + s->crop_left,
-			   s->cursor->y_org + s->crop_top);
+			   s->cursor->y_org + s->crop_top, s->width, s->height);
 
 	pthread_mutex_unlock(&s->lock);
 	obs_leave_graphics();

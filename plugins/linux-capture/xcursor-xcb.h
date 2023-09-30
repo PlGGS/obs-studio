@@ -34,6 +34,8 @@ typedef struct {
 	int y;
 	int x_org;
 	int y_org;
+	int width_org;
+	int height_org;
 	float x_render;
 	float y_render;
 } xcb_xcursor_t;
@@ -59,7 +61,7 @@ void xcb_xcursor_destroy(xcb_xcursor_t *data);
  * @note This needs to be executed within a valid render context
  *
  */
-void xcb_xcursor_update(xcb_connection_t *xcb, xcb_xcursor_t *data);
+void xcb_xcursor_update(xcb_connection_t *xcb, xcb_xcursor_t *data, bool show_current_cursor_screen);
 
 /**
  * Draw the cursor
@@ -71,7 +73,7 @@ void xcb_xcursor_render(xcb_xcursor_t *data);
 /**
  * Specify a manual offset for the cursor.
  */
-void xcb_xcursor_offset(xcb_xcursor_t *data, const int x_org, const int y_org);
+void xcb_xcursor_offset(xcb_xcursor_t *data, const int x_org, const int y_org, const int width_org, const int height_org);
 
 /**
  * Update the offset to match the window's origin.
