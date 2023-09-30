@@ -18,6 +18,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <stdio.h>
 #include <stdlib.h>
 #include <inttypes.h>
+#include <xcb/xcb.h>
 #include <xcb/randr.h>
 #include <xcb/shm.h>
 #include <xcb/xfixes.h>
@@ -103,6 +104,61 @@ static bool xshm_check_extensions(xcb_connection_t *xcb)
 }
 
 /**
+ * Returns the number of screens
+*/
+static int_fast32_t xshm_get_screen_count(struct xcb_connection_t *xcb)
+{
+	return randr_is_active(xcb) ? randr_screen_count(xcb)
+		      : (xinerama_is_active(xcb) ? xinerama_screen_count(xcb)
+				  : xcb_setup_roots_length(xcb_get_setup(xcb)));
+}
+
+/**
+ * Returns the screen_id of the screen which the mouse cursor is currently within the bounds of
+ * 
+ * @return < 0 on error, >= 0 when the cursor is found within a screen
+*/
+static int_fast32_t xshm_get_current_cursor_screen(struct xshm_data *data)
+{
+	int_fast32_t screen_id = -1;
+	
+	int_fast32_t cursor_x, cursor_y;
+	xcb_query_pointer_reply_t *cursor = xcb_query_pointer_reply(
+		data->xcb, xcb_query_pointer(data->xcb, data->xcb_screen->root), NULL);
+
+	if (cursor != NULL) {
+		cursor_x = cursor->root_x;
+		cursor_y = cursor->root_y;
+		free(cursor);
+	} else {
+		cursor_x = cursor_y = -1;
+	}
+
+	for (int_fast32_t i = 0; i < xshm_get_screen_count(data->xcb); ++i) {
+		int_fast32_t x, y, w, h;
+		x = y = w = h = 0;
+
+		if (randr_is_active(data->xcb))
+			randr_screen_geo(data->xcb, i, &x, &y, &w, &h, NULL, NULL);
+		else if (xinerama_is_active(data->xcb))
+			xinerama_screen_geo(data->xcb, i, &x, &y, &w, &h);
+		else
+			x11_screen_geo(data->xcb, i, &w, &h);
+
+		if (cursor_x >= x && cursor_x < x + w && cursor_y >= y && cursor_y < y + h) {
+			if (h > 0 && w > 0) {
+				screen_id = i;
+				break;
+			}
+		}
+	}
+
+	blog(LOG_INFO, "Mouse cursor is on screen %lu", screen_id);
+
+	return screen_id;
+}
+
+/**
  * Update the capture
  *
  * @return < 0 on error, 0 when size is unchanged, > 1 on size change
@@ -112,9 +168,16 @@ static int_fast32_t xshm_update_geometry(struct xshm_data *data)
 	int_fast32_t prev_width = data->adj_width;
 	int_fast32_t prev_height = data->adj_height;
 
+	if (data->show_current_cursor_screen) {
+		//Set screen_id to the corresponding screen that the mouse is on
+		data->screen_id = xshm_get_current_cursor_screen(data);
+	}
+
 	char screen_str[12];
+	char current[10];
     sprintf(screen_str, "%lu", data->screen_id);
-	blog(LOG_INFO, "Screen ID: %s", screen_str);
+    sprintf(current, "%s", data->show_current_cursor_screen ? "true" : "false");
+	blog(LOG_INFO, "Screen ID: %s, current: %s", screen_str, current);
 
 	if (data->use_randr) {
 		if (randr_screen_geo(data->xcb, data->screen_id, &data->x_org,
@@ -350,12 +413,8 @@ static bool xshm_server_changed(obs_properties_t *props, obs_property_t *p,
 
 	struct dstr screen_info;
 	dstr_init(&screen_info);
-	bool randr = randr_is_active(xcb);
-	bool xinerama = xinerama_is_active(xcb);
-	int_fast32_t count =
-		randr ? randr_screen_count(xcb)
-		      : (xinerama ? xinerama_screen_count(xcb)
-				  : xcb_setup_roots_length(xcb_get_setup(xcb)));
+	
+	int_fast32_t count = xshm_get_screen_count(xcb);
 
 	for (int_fast32_t i = 0; i < count; ++i) {
 		char *name;
@@ -364,9 +423,9 @@ static bool xshm_server_changed(obs_properties_t *props, obs_property_t *p,
 		x = y = w = h = 0;
 
 		name = NULL;
-		if (randr)
+		if (randr_is_active(xcb))
 			randr_screen_geo(xcb, i, &x, &y, &w, &h, NULL, &name);
-		else if (xinerama)
+		else if (xinerama_is_active(xcb))
 			xinerama_screen_geo(xcb, i, &x, &y, &w, &h);
 		else
 			x11_screen_geo(xcb, i, &w, &h);
@@ -413,7 +472,7 @@ static bool xshm_server_changed(obs_properties_t *props, obs_property_t *p,
 }
 
 /**
- * The x server was changed
+ * The show current cursor screen checkbox was changed
  */
 static bool xshm_show_current_cursor_screen_changed(obs_properties_t *props, obs_property_t *p,
 				obs_data_t *settings)
